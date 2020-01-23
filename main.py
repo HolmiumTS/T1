@@ -33,7 +33,8 @@ class RNN(nn.Module):
             batch_first=True,
         )
 
-        self.out = nn.Linear(HIDDEN_SIZE, 310)
+        self.mid = nn.Linear(HIDDEN_SIZE, 256)
+        self.out = nn.Linear(256, 310)
 
     def forward(self, x):
         # x shape (batch, time_step, input_size)
@@ -43,12 +44,14 @@ class RNN(nn.Module):
         r_out, (h_n, h_c) = self.rnn(x, None)  # None represents zero initial hidden state
 
         # choose r_out at the last time step
-        out = self.out(r_out[:, -1, :])
+        mid = self.mid(nn.functional.relu(r_out[:, -1, :]))
+        out = self.out(nn.functional.relu(mid))
+        # out = self.out(mid)
         return out
 
 
 if __name__ == '__main__':
-    rnn = RNN()
+    rnn = RNN().cuda()
     print(rnn)
 
     optimizer = torch.optim.Adam(rnn.parameters(), lr=LR)  # optimize all cnn parameters
@@ -57,7 +60,8 @@ if __name__ == '__main__':
     # training and testing
     for epoch in range(EPOCH):
         for step, (b_x, b_y) in enumerate(train_loader):  # gives batch data
-            b_x = torch.tensor(b_x, dtype=torch.float32)
+            b_x = torch.tensor(b_x, dtype=torch.float32).cuda()
+            b_y = b_y.cuda()
             output = rnn(b_x)  # rnn output
             loss = loss_func(output, b_y)  # cross entropy loss
             optimizer.zero_grad()  # clear gradients for this training step
@@ -66,9 +70,9 @@ if __name__ == '__main__':
 
     pred = []
     for step, (b_x, b_y) in enumerate(train_loader):  # gives batch data
-        b_x = torch.tensor(b_x, dtype=torch.float32)
+        b_x = torch.tensor(b_x, dtype=torch.float32).cuda()
         test_output = rnn(b_x)  # (samples, time_step, input_size)
-        pred_y = torch.max(test_output, 1)[1].data.numpy()
+        pred_y = torch.max(test_output, 1)[1].cpu().data.numpy()
         pred.extend(pred_y)
         # accuracy = float((pred_y == test_y).astype(int).sum()) / float(test_y.size)
         # print('Epoch: ', epoch, '| train loss: %.4f' % loss.data.numpy(), '| test accuracy: %.2f' % accuracy)
